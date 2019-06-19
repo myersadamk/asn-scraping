@@ -60,33 +60,41 @@ class Soupable(object):
         return bs4.BeautifulSoup(html, 'html.parser')
 
 
-class AsnReport(Soupable):
+class CountryReport(Soupable):
     url = 'https://bgp.he.net/country/'
 
     def __init__(self, country_code):
         self.url += country_code
         self.country_code = country_code
-        super(AsnReport, self).__init__(self.url)
+        super(CountryReport, self).__init__(self.url)
 
 
-class ReportsTable(Soupable):
-    report_link_regex = compile('^/country/([A-Z]+)')
-    report_link_attrs = {'href': report_link_regex}
+class AsnReportIndex(Soupable):
+    _REPORT_LINK_REGEX = compile('/country/([A-Z]+)')
+    _REPORT_LINK_ATTRS = {'href': _REPORT_LINK_REGEX}
 
     def __init__(self):
-        super(ReportsTable, self).__init__('http://bgp.he.net/report/world')
+        super(AsnReportIndex, self).__init__('http://bgp.he.net/report/world')
 
     def get_reports(self):
-        def report_from_report_link_element(element):
-            AsnReport(match(self.report_link_regex, element.attrs['href']).group(1))
+        def get_report_from_report_link_element(element):
+            return CountryReport(match(self._REPORT_LINK_REGEX, element.attrs['href']).group(1))
 
         return map(
-            lambda element: report_from_report_link_element(element),
-            self.soup.find_all(name='a', attrs=self.report_link_attrs)
+            lambda e: get_report_from_report_link_element(e),
+            self.soup.find_all(name='a', attrs=self._REPORT_LINK_ATTRS)
         )
 
 
-# for r in ReportsTable().get_reports(): print r.country_code
+class AsnReportParser:
+
+    def __init__(self, reports_table=AsnReportIndex()):
+        self._reports_table = reports_table
+
+    def generate_asn_report(self):
+        return dumps('')
+
+for r in AsnReportIndex().get_reports(): print r.country_code
 # for r in ReportsTable().get_reports(): print r.soup
 # print AsnReport('DE').soup.prettify()
-print AsnReport('DE').soup.prettify()
+# print AsnReport('DE').soup.prettify()

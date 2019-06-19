@@ -1,5 +1,5 @@
 from unittest import TestCase
-from solution import AutonomousSystemNumber
+from hurricane_electric import AutonomousSystemNumber
 from json import dumps
 
 class AutonomousSystemNumberTest(TestCase):
