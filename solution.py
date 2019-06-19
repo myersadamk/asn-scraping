@@ -26,7 +26,7 @@
 # BeautifulSoup:
 # http://www.crummy.com/software/BeautifulSoup/bs4/doc/
 #
-import re
+from re import compile, match
 from urllib2 import Request, urlopen
 from itertools import izip
 import bs4
@@ -49,38 +49,44 @@ class AutonomousSystemNumber:
         return dumps(self.__dict__)
 
 
-class ReportsTable:
+class Soupable(object):
+    def __init__(self, url):
+        self.url = url
 
-    report_link_regex = re.compile('^/country/([A-Z]+)')
-    report_link_attrs = {'href': report_link_regex}
-
-    url = 'http://bgp.he.net/report/world'
-    soup = ''
-
-    def __init__(self):
-        self.soup = self.__url_to_soup()
-
-    def get_report_urls(self):
-       return map(
-            lambda element: re.match(self.report_link_regex, element.attrs['href']).group(0),
-                  soup.find_all(name='a', attrs=self.report_link_attrs)
-       )
-
-    # Given url, return soup.
-    def __url_to_soup(self):
+    @property
+    def soup(self):
         # bgp.he.net filters based on user-agent.
         html = urlopen(Request(self.url, headers={'User-Agent': 'Mozilla/5.0'})).read()
         return bs4.BeautifulSoup(html, 'html.parser')
 
-soup = ReportsTable().soup;
-# print soup.prettify()
 
-print ReportsTable().get_report_urls()
+class AsnReport(Soupable):
+    url = 'https://bgp.he.net/country/'
 
-# bs4.element.Tag.attrs['href']
+    def __init__(self, country_code):
+        self.url += country_code
+        self.country_code = country_code
+        super(AsnReport, self).__init__(self.url)
 
-# elements = soup.find_all(name='a', attrs=ReportsTable.report_link_attrs)
-# for element in elements:
-#     print element.attrs['href']
-#     print type(element)
-#     print re.match(ReportsTable.report_link_regex, element)
+
+class ReportsTable(Soupable):
+    report_link_regex = compile('^/country/([A-Z]+)')
+    report_link_attrs = {'href': report_link_regex}
+
+    def __init__(self):
+        super(ReportsTable, self).__init__('http://bgp.he.net/report/world')
+
+    def get_reports(self):
+        def report_from_report_link_element(element):
+            AsnReport(match(self.report_link_regex, element.attrs['href']).group(1))
+
+        return map(
+            lambda element: report_from_report_link_element(element),
+            self.soup.find_all(name='a', attrs=self.report_link_attrs)
+        )
+
+
+# for r in ReportsTable().get_reports(): print r.country_code
+# for r in ReportsTable().get_reports(): print r.soup
+# print AsnReport('DE').soup.prettify()
+print AsnReport('DE').soup.prettify()
