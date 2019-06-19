@@ -34,19 +34,24 @@ from json import dumps
 
 
 class AutonomousSystemNumber:
-    name = ''
-    country = ''
-    v4RouteCount = 0
-    v6RouteCount = 0
+    _ASN_SUBSTITUTION_REGEX = compile('AS([0-9])+')
 
-    def __init__(self, name, country, v4RouteCount, v6RouteCount):
-        self.name = name
+    def __init__(self, full_asn, country, name, v4RouteCount, v6RouteCount):
+        self._full_asn = full_asn
         self.country = country
+        self.name = name
         self.v4RouteCount = v4RouteCount
         self.v6RouteCount = v6RouteCount
 
     def toJSON(self):
-        return dumps(self.__dict__)
+        return dumps({
+            'Country': self.country,
+            'Name': self.name
+        })
+
+    @staticmethod
+    def from_soup(table_row_soup):
+        asn_info = table_row_soup.find_all('td')
 
 
 class Soupable(object):
@@ -67,6 +72,21 @@ class CountryReport(Soupable):
         self.url += country_code
         self.country_code = country_code
         super(CountryReport, self).__init__(self.url)
+
+    def get_asn_info_by_asn_id(self):
+        asn_info_by_asn_id = {}
+        for row in self.soup.find('table', attrs={'id': 'asns'}).find('tbody').find_all('tr'):
+            asn_info = row.find_all('td')
+
+            assert asn_info.__len__() == 6
+
+            asn_info_by_asn_id[asn_info[0].text.strip('AS')] = {
+                'Country': self.country_code,
+                'Name': asn_info[1].text,
+                'Routes v4': asn_info[3].text,
+                'Routes v6': asn_info[5].text,
+            }
+        return dumps(asn_info_by_asn_id, indent=2, sort_keys=True)
 
 
 class AsnReportIndex(Soupable):
@@ -94,7 +114,8 @@ class AsnReportParser:
     def generate_asn_report(self):
         return dumps('')
 
-for r in AsnReportIndex().get_reports(): print r.country_code
+
+# for r in AsnReportIndex().get_reports(): print r.country_code
 # for r in ReportsTable().get_reports(): print r.soup
 # print AsnReport('DE').soup.prettify()
-# print AsnReport('DE').soup.prettify()
+print CountryReport('DE').get_asn_info_by_asn_id()
