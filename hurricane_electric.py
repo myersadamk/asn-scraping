@@ -43,6 +43,7 @@ class Soupable(object):
     def __init__(self, url):
         self.url = url
 
+    # Gets the HTML at the configured URL as BeautifulSoup.
     @property
     def soup(self):
         # bgp.he.net filters based on user-agent.
@@ -106,6 +107,8 @@ class ActiveAsnDirectory(Soupable):
     def __init__(self):
         super(ActiveAsnDirectory, self).__init__('http://bgp.he.net/report/world')
 
+    # Gets all CountryAsnReport for the given country_codes (if provided), otherwise gets them for all listed countries
+    # listed in the directory.
     def get_reports(self, *country_codes):
         def get_report_from_report_link_element(element):
             return CountryAsnReport(match(self._REPORT_LINK_REGEX, element.attrs['href']).group(1))
@@ -129,6 +132,7 @@ class ActiveAsnReportGenerator:
         if not path.exists(self._report_dir):
             mkdir(self._report_dir)
 
+    # Deletes all ASN reports at the configured report directory.
     def clear_asn_reports(self):
         for report in listdir(path.join(curdir, self._report_dir)):
             remove(path.join(curdir, self._report_dir, report))
@@ -170,9 +174,10 @@ class ActiveAsnReportGenerator:
 
         return final_report
 
+    # Converts a report to JSON format.
     @staticmethod
     def as_json(report):
-        return dumps(report, indent=2, sort_keys=True)
+        return dumps(report, indent=2)
 
 
 if __name__ == '__main__':
