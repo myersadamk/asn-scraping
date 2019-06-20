@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-
+from os import listdir, path
 from unittest import TestCase
-from hurricane_electric import CountryAsnReport, ActiveAsnDirectory
+from hurricane_electric import CountryAsnReport, ActiveAsnDirectory, ActiveAsnReportGenerator
+from json import load
 import bs4
 
 
@@ -44,19 +45,19 @@ class CountryAsnReportTest(SoupableTestFixture, TestCase):
 class ActiveAsnDirectoryTest(SoupableTestFixture, TestCase):
 
     def setUp(self):
-        self.directory = ActiveAsnDirectory()
+        self._directory = ActiveAsnDirectory()
 
     def test_no_report_links_returns_empty(self):
-        self.set_soup(self.directory, self.blank_soup)
-        self.assertEqual(self.directory.get_reports(), [])
+        self.set_soup(self._directory, self.blank_soup)
+        self.assertEqual(self._directory.get_reports(), [])
 
     def test_no_report_links_returns_empty_when_country_code_provided(self):
-        self.set_soup(self.directory, self.blank_soup)
-        self.assertEqual(self.directory.get_reports('US'), [])
+        self.set_soup(self._directory, self.blank_soup)
+        self.assertEqual(self._directory.get_reports('US'), [])
 
     def test_multiple_report_links_found(self):
         self.set_soup(
-            self.directory,
+            self._directory,
             '<a href="/country/US">'
             '<a href="/country/UK">'
             '<a href="/country/DE">'
@@ -64,13 +65,13 @@ class ActiveAsnDirectoryTest(SoupableTestFixture, TestCase):
 
         found_country_codes = map(
             lambda report: report._country_code,
-            self.directory.get_reports()
+            self._directory.get_reports()
         )
         self.assertEqual(found_country_codes, ['US', 'UK', 'DE'])
 
     def test_multiple_report_links_found_when_country_code_provided(self):
         self.set_soup(
-            self.directory,
+            self._directory,
             '<a href="/country/US">'
             '<a href="/country/UK">'
             '<a href="/country/DE">'
@@ -78,6 +79,32 @@ class ActiveAsnDirectoryTest(SoupableTestFixture, TestCase):
 
         found_country_codes = map(
             lambda report: report._country_code,
-            self.directory.get_reports('US', 'DE')
+            self._directory.get_reports('US', 'DE')
         )
         self.assertEqual(['US', 'DE'], found_country_codes)
+
+
+class HurricaneElectricIntegrationTest(TestCase):
+    _REPORT_DIR = 'test_reports'
+
+    def setUp(self):
+        self._report_generator = ActiveAsnReportGenerator(report_dir=self._REPORT_DIR)
+        self._report_generator.clear_asn_reports()
+
+    def tearDown(self):
+        self._report_generator.clear_asn_reports()
+
+    def test_write_US_asn_report(self):
+        self.assertEqual(listdir(self._REPORT_DIR).__len__(), 0)
+        self._report_generator.write_asn_report('US')
+
+        reports = listdir(self._REPORT_DIR)
+        self.assertEqual(reports.__len__(), 1)
+
+        with open(path.join(self._REPORT_DIR, reports[0]), 'r') as report:
+            for asn in load(report).values():
+                self.assertEqual('US', asn['Country'])
+                self.assertNotEqual(0, asn['Name'].__len__())
+                self.assertEqual(unicode, type(asn['Name']))
+                self.assertEqual(int, type(asn['Routes v4']))
+                self.assertEqual(int, type(asn['Routes v6']))

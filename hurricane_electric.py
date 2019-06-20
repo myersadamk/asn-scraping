@@ -106,7 +106,7 @@ class ActiveAsnDirectory(Soupable):
             return CountryAsnReport(match(self._REPORT_LINK_REGEX, element.attrs['href']).group(1))
 
         def get_country_code_regex(all_countries=self._REPORT_LINK_REGEX):
-            return all_countries if country_codes == () else compile('/country/' + "|".join(*country_codes))
+            return all_countries if country_codes == () else compile('/country/' + "|".join(country_codes))
 
         return map(
             lambda element: get_report_from_report_link_element(element),
@@ -121,18 +121,18 @@ class ActiveAsnReportGenerator:
         self._report_prefix = report_prefix
         self._report_dir = report_dir
 
+        if not path.exists(self._report_dir):
+            mkdir(self._report_dir)
+
     def clear_asn_reports(self):
-        for report in listdir(self._report_dir):
+        for report in listdir(path.join(curdir, self._report_dir)):
             remove(path.join(curdir, self._report_dir, report))
 
     def write_asn_report(self, *country_codes):
         def generate_current_timestamp():
             return datetime.fromtimestamp(time()).strftime('%Y_%m_%d_%H_%M_%S')
 
-        if not path.exists(self._report_dir):
-            mkdir(self._report_dir)
-
-        report_path = path.join(self._report_dir, self._report_prefix + '_' + generate_current_timestamp() + '.json')
+        report_path = path.join(curdir, self._report_dir, self._report_prefix + '_' + generate_current_timestamp() + '.json')
 
         with open(report_path, 'w') as report_file:
             report_file.write(dumps(self.get_asn_report(*country_codes), indent=2, sort_keys=True))
@@ -146,7 +146,7 @@ class ActiveAsnReportGenerator:
 
         threads = []
 
-        for current_report in self._reports_table.get_reports(country_codes):
+        for current_report in self._reports_table.get_reports(*country_codes):
             thread = Thread(target=append_asn_report, args=(current_report,))
             thread.start()
             threads.append(thread)
@@ -156,10 +156,10 @@ class ActiveAsnReportGenerator:
 
         return final_report
 
-
 # ActiveAsnReportGenerator().clear_asn_reports()
-ActiveAsnReportGenerator().write_asn_report('US', 'DE', 'NU')
+# ActiveAsnReportGenerator().write_asn_report('US', 'DE', 'NU')
 # ActiveAsnReportGenerator().write_asn_report()
 
 # print u'129,488'.replace(',', '')
 # int('129,488')
+# ActiveAsnDirectory().get_reports('DE', 'US')
