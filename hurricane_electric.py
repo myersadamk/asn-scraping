@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-#
 # Web scraping
 # ASNs (Autonomous System Numbers) are one of the building blocks of the
 # Internet. This project is to create a mapping from each ASN in use to the
@@ -26,34 +25,20 @@
 # BeautifulSoup:
 # http://www.crummy.com/software/BeautifulSoup/bs4/doc/
 #
-from re import compile, match
-from urllib2 import Request, urlopen
-from itertools import izip
-import bs4
+
+from datetime import datetime
 from json import dumps
+from os import path, curdir, listdir, mkdir, remove
+from re import compile, match
+from threading import Thread
+from time import time
+from urllib2 import Request, urlopen
+from string import translate
+
+from bs4 import BeautifulSoup
 
 
-class AutonomousSystemNumber:
-    _ASN_SUBSTITUTION_REGEX = compile('AS([0-9])+')
-
-    def __init__(self, full_asn, country, name, v4RouteCount, v6RouteCount):
-        self._full_asn = full_asn
-        self.country = country
-        self.name = name
-        self.v4RouteCount = v4RouteCount
-        self.v6RouteCount = v6RouteCount
-
-    def toJSON(self):
-        return dumps({
-            'Country': self.country,
-            'Name': self.name
-        })
-
-    @staticmethod
-    def from_soup(table_row_soup):
-        asn_info = table_row_soup.find_all('td')
-
-
+# Mixin for objects that can be represented as HTML pages.
 class Soupable(object):
     def __init__(self, url):
         self.url = url
@@ -62,60 +47,119 @@ class Soupable(object):
     def soup(self):
         # bgp.he.net filters based on user-agent.
         html = urlopen(Request(self.url, headers={'User-Agent': 'Mozilla/5.0'})).read()
-        return bs4.BeautifulSoup(html, 'html.parser')
+        return BeautifulSoup(html, 'html.parser')
 
 
-class CountryReport(Soupable):
-    url = 'https://bgp.he.net/country/'
+# Wraps individual Country's active ASN pages.
+class CountryAsnReport(Soupable):
 
     def __init__(self, country_code):
-        self.url += country_code
-        self.country_code = country_code
-        super(CountryReport, self).__init__(self.url)
+        self._country_code = self._to_utf8(country_code)
+        super(CountryAsnReport, self).__init__('https://bgp.he.net/country/' + country_code)
 
-    def get_asn_info_by_asn_id(self):
+    # Returns a report of the active ASNs for the current country in the following object format:
+    # { <asn identifier in numeric form>:
+    #     'Country': <country code>
+    #     'Name': <name of ASN owner>
+    #     'Routes v4': <number of v4 routes>
+    #     'Routes v6': <number of v6 routes>
+    # }
+    #
+    def get_asn_report(self):
         asn_info_by_asn_id = {}
-        for row in self.soup.find('table', attrs={'id': 'asns'}).find('tbody').find_all('tr'):
+        table_soup = self.soup.find('table', attrs={'id': 'asns'})
+
+        # Not all countries have active ASNs; in that case, there will be no 'asn' <table> element.
+        if table_soup is None:
+            return asn_info_by_asn_id
+
+        def parse_numeric(element):
+            return int(element.text.replace(',', ''))
+
+        def parse_unicode(element):
+            return self._to_utf8(element.text)
+
+        for row in table_soup.find('tbody').find_all('tr'):
             asn_info = row.find_all('td')
-
-            assert asn_info.__len__() == 6
-
-            asn_info_by_asn_id[asn_info[0].text.strip('AS')] = {
-                'Country': self.country_code,
-                'Name': asn_info[1].text,
-                'Routes v4': asn_info[3].text,
-                'Routes v6': asn_info[5].text,
+            asn_info_by_asn_id[parse_unicode(asn_info[0]).strip('AS')] = {
+                'Country': self._country_code,
+                'Name': parse_unicode(asn_info[1]),
+                'Routes v4': parse_numeric(asn_info[3]),
+                'Routes v6': parse_numeric(asn_info[5])
             }
-        return dumps(asn_info_by_asn_id, indent=2, sort_keys=True)
+
+        return asn_info_by_asn_id
+
+    @staticmethod
+    def _to_utf8(unicode_string):
+        return unicode_string.encode('utf-8')
 
 
-class AsnReportIndex(Soupable):
+class ActiveAsnDirectory(Soupable):
     _REPORT_LINK_REGEX = compile('/country/([A-Z]+)')
-    _REPORT_LINK_ATTRS = {'href': _REPORT_LINK_REGEX}
 
     def __init__(self):
-        super(AsnReportIndex, self).__init__('http://bgp.he.net/report/world')
+        super(ActiveAsnDirectory, self).__init__('http://bgp.he.net/report/world')
 
-    def get_reports(self):
+    def get_reports(self, *country_codes):
         def get_report_from_report_link_element(element):
-            return CountryReport(match(self._REPORT_LINK_REGEX, element.attrs['href']).group(1))
+            return CountryAsnReport(match(self._REPORT_LINK_REGEX, element.attrs['href']).group(1))
+
+        def get_country_code_regex(all_countries=self._REPORT_LINK_REGEX):
+            return all_countries if country_codes == () else compile('/country/' + "|".join(*country_codes))
 
         return map(
-            lambda e: get_report_from_report_link_element(e),
-            self.soup.find_all(name='a', attrs=self._REPORT_LINK_ATTRS)
+            lambda element: get_report_from_report_link_element(element),
+            self.soup.find_all(name='a', attrs={'href': get_country_code_regex()})
         )
 
 
-class AsnReportParser:
+class ActiveAsnReportGenerator:
 
-    def __init__(self, reports_table=AsnReportIndex()):
+    def __init__(self, reports_table=ActiveAsnDirectory(), report_prefix='asn_report', report_dir='reports'):
         self._reports_table = reports_table
+        self._report_prefix = report_prefix
+        self._report_dir = report_dir
 
-    def generate_asn_report(self):
-        return dumps('')
+    def clear_asn_reports(self):
+        for report in listdir(self._report_dir):
+            remove(path.join(curdir, self._report_dir, report))
+
+    def write_asn_report(self, *country_codes):
+        def generate_current_timestamp():
+            return datetime.fromtimestamp(time()).strftime('%Y_%m_%d_%H_%M_%S')
+
+        if not path.exists(self._report_dir):
+            mkdir(self._report_dir)
+
+        report_path = path.join(self._report_dir, self._report_prefix + '_' + generate_current_timestamp() + '.json')
+
+        with open(report_path, 'w') as report_file:
+            report_file.write(dumps(self.get_asn_report(*country_codes), indent=2, sort_keys=True))
+
+    def get_asn_report(self, *country_codes):
+        final_report = {}
+
+        # Note that I researched this, and dict::update is an atomic operation, and therefore thread-safe.
+        def append_asn_report(report):
+            final_report.update(report.get_asn_report())
+
+        threads = []
+
+        for current_report in self._reports_table.get_reports(country_codes):
+            thread = Thread(target=append_asn_report, args=(current_report,))
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+
+        return final_report
 
 
-# for r in AsnReportIndex().get_reports(): print r.country_code
-# for r in ReportsTable().get_reports(): print r.soup
-# print AsnReport('DE').soup.prettify()
-print CountryReport('DE').get_asn_info_by_asn_id()
+# ActiveAsnReportGenerator().clear_asn_reports()
+ActiveAsnReportGenerator().write_asn_report('US', 'DE', 'NU')
+# ActiveAsnReportGenerator().write_asn_report()
+
+# print u'129,488'.replace(',', '')
+# int('129,488')
