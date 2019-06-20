@@ -1,15 +1,19 @@
 #!/usr/bin/env python
+
+from json import load
 from os import listdir, path
 from unittest import TestCase
-from hurricane_electric import CountryAsnReport, ActiveAsnDirectory, ActiveAsnReportGenerator
-from json import load
+
 import bs4
+
+from hurricane_electric import CountryAsnReport, ActiveAsnDirectory, ActiveAsnReportGenerator
 
 
 class SoupableTestFixture():
     blank_soup = '<html><head /><body /></html>'
 
-    def set_soup(self, instance, soup):
+    @staticmethod
+    def set_soup(instance, soup):
         instance.__class__.soup = bs4.BeautifulSoup(soup, 'html.parser')
 
 
@@ -19,12 +23,12 @@ class CountryAsnReportTest(SoupableTestFixture, TestCase):
         self.report = CountryAsnReport('US')
 
     def test_no_active_asns_returns_empty(self):
-        self.set_soup(self.report, self.blank_soup)
+        SoupableTestFixture.set_soup(self.report, self.blank_soup)
         self.assertEqual(self.report.get_asn_report(), {})
 
     def test_active_asns_parse_correctly(self):
         report = CountryAsnReport('US')
-        self.set_soup(
+        SoupableTestFixture.set_soup(
             self.report,
             '<table id="asns"><tbody><tr>'
             '<td>AS123</td>'
@@ -48,15 +52,15 @@ class ActiveAsnDirectoryTest(SoupableTestFixture, TestCase):
         self._directory = ActiveAsnDirectory()
 
     def test_no_report_links_returns_empty(self):
-        self.set_soup(self._directory, self.blank_soup)
+        SoupableTestFixture.set_soup(self._directory, self.blank_soup)
         self.assertEqual(self._directory.get_reports(), [])
 
     def test_no_report_links_returns_empty_when_country_code_provided(self):
-        self.set_soup(self._directory, self.blank_soup)
+        SoupableTestFixture.set_soup(self._directory, self.blank_soup)
         self.assertEqual(self._directory.get_reports('US'), [])
 
     def test_multiple_report_links_found(self):
-        self.set_soup(
+        SoupableTestFixture.set_soup(
             self._directory,
             '<a href="/country/US">'
             '<a href="/country/UK">'
@@ -70,7 +74,7 @@ class ActiveAsnDirectoryTest(SoupableTestFixture, TestCase):
         self.assertEqual(found_country_codes, ['US', 'UK', 'DE'])
 
     def test_multiple_report_links_found_when_country_code_provided(self):
-        self.set_soup(
+        SoupableTestFixture.set_soup(
             self._directory,
             '<a href="/country/US">'
             '<a href="/country/UK">'
@@ -102,9 +106,43 @@ class HurricaneElectricIntegrationTest(TestCase):
         self.assertEqual(reports.__len__(), 1)
 
         with open(path.join(self._REPORT_DIR, reports[0]), 'r') as report:
-            for asn in load(report).values():
+            asns = load(report)
+            self.assertGreater(asns.values().__len__, 0)
+            for asn in asns.values():
                 self.assertEqual('US', asn['Country'])
-                self.assertNotEqual(0, asn['Name'].__len__())
+                self.assertGreater(asn['Name'].__len__, 0)
                 self.assertEqual(unicode, type(asn['Name']))
                 self.assertEqual(int, type(asn['Routes v4']))
                 self.assertEqual(int, type(asn['Routes v6']))
+
+    def test_write_US_asn_report(self):
+        def assertion_func(asn):
+            self.assertEqual('US', asn['Country'])
+            self.assertGreater(asn['Name'].__len__, 0)
+            self.assertEqual(unicode, type(asn['Name']))
+            self.assertEqual(int, type(asn['Routes v4']))
+            self.assertEqual(int, type(asn['Routes v6']))
+        self.generate_report(assertion_func, 'US')
+
+    def test_write_US_DE_asn_report(self):
+        def assertion_func(asn):
+            # Not an ideal assertion, since we could still not have any DE or US in the output
+            self.assertIn(('US', 'DE'), asn['Country'])
+            self.assertGreater(asn['Name'].__len__, 0)
+            self.assertEqual(unicode, type(asn['Name']))
+            self.assertEqual(int, type(asn['Routes v4']))
+            self.assertEqual(int, type(asn['Routes v6']))
+        self.generate_report(assertion_func, 'US', 'DE')
+
+    def generate_report(self, assertion_func, *country_codes):
+        self.assertEqual(listdir(self._REPORT_DIR).__len__(), 0)
+        self._report_generator.write_asn_report(*country_codes)
+
+        reports = listdir(self._REPORT_DIR)
+        self.assertEqual(reports.__len__(), 1)
+
+        with open(path.join(self._REPORT_DIR, reports[0]), 'r') as report:
+            asns = load(report)
+            self.assertGreater(asns.values().__len__, 0)
+            for asn in asns.iteritems():
+                assertion_func(asn)

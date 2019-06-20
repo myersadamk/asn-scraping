@@ -132,7 +132,8 @@ class ActiveAsnReportGenerator:
         def generate_current_timestamp():
             return datetime.fromtimestamp(time()).strftime('%Y_%m_%d_%H_%M_%S')
 
-        report_path = path.join(curdir, self._report_dir, self._report_prefix + '_' + generate_current_timestamp() + '.json')
+        report_path = \
+            path.join(curdir, self._report_dir, self._report_prefix + '_' + generate_current_timestamp() + '.json')
 
         with open(report_path, 'w') as report_file:
             report_file.write(dumps(self.get_asn_report(*country_codes), indent=2, sort_keys=True))
@@ -163,3 +164,10 @@ class ActiveAsnReportGenerator:
 # print u'129,488'.replace(',', '')
 # int('129,488')
 # ActiveAsnDirectory().get_reports('DE', 'US')
+
+# if __main__
+
+dic = {'a': 'b'}
+for k, v in dic.iteritems():
+    print k
+    print v
