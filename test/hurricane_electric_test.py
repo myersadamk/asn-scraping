@@ -10,7 +10,9 @@ from hurricane_electric import CountryAsnReport, ActiveAsnDirectory, ActiveAsnRe
 
 
 class SoupableTestFixture():
-    blank_soup = '<html><head /><body /></html>'
+
+    def __init__(self):
+        self.blank_soup = '<html><head /><body /></html>'
 
     @staticmethod
     def set_soup(instance, soup):
@@ -99,32 +101,26 @@ class HurricaneElectricIntegrationTest(TestCase):
         self._report_generator.clear_asn_reports()
 
     def test_write_US_asn_report(self):
-        self.assertEqual(listdir(self._REPORT_DIR).__len__(), 0)
-        self._report_generator.write_asn_report('US')
-
-        reports = listdir(self._REPORT_DIR)
-        self.assertEqual(reports.__len__(), 1)
-
-        with open(path.join(self._REPORT_DIR, reports[0]), 'r') as report:
-            asns = load(report)
-            self.assertGreater(asns.values().__len__, 0)
-            for asn in asns.values():
-                self.assertEqual('US', asn['Country'])
-                self.assertGreater(asn['Name'].__len__, 0)
-                self.assertEqual(unicode, type(asn['Name']))
-                self.assertEqual(int, type(asn['Routes v4']))
-                self.assertEqual(int, type(asn['Routes v6']))
-
-    def test_write_US_asn_report(self):
         def assertion_func(asn):
             self.assertEqual('US', asn['Country'])
             self.assertGreater(asn['Name'].__len__, 0)
             self.assertEqual(unicode, type(asn['Name']))
             self.assertEqual(int, type(asn['Routes v4']))
             self.assertEqual(int, type(asn['Routes v6']))
-        self.generate_report(assertion_func, 'US')
 
-    def generate_report(self, assertion_func, *country_codes):
+        self._generate_and_assert_report(assertion_func, 'US')
+
+    def test_write_full_asn_report(self):
+        def assertion_func(asn):
+            self.assertEqual(asn['Country'].__len__(), 2)
+            self.assertGreater(asn['Name'].__len__, 0)
+            self.assertEqual(unicode, type(asn['Name']))
+            self.assertEqual(int, type(asn['Routes v4']))
+            self.assertEqual(int, type(asn['Routes v6']))
+
+        self._generate_and_assert_report(assertion_func)
+
+    def _generate_and_assert_report(self, assertion_func, *country_codes):
         self.assertEqual(listdir(self._REPORT_DIR).__len__(), 0)
         self._report_generator.write_asn_report(*country_codes)
 

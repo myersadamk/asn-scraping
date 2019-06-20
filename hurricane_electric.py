@@ -157,6 +157,7 @@ class ActiveAsnReportGenerator:
 
         return final_report
 
+
 # ActiveAsnReportGenerator().clear_asn_reports()
 # ActiveAsnReportGenerator().write_asn_report('US', 'DE', 'NU')
 # ActiveAsnReportGenerator().write_asn_report()
@@ -165,9 +166,5 @@ class ActiveAsnReportGenerator:
 # int('129,488')
 # ActiveAsnDirectory().get_reports('DE', 'US')
 
-# if __main__
-
-dic = {'a': 'b'}
-for k, v in dic.iteritems():
-    print k
-    print v
+if __name__ == '__main__':
+    print 'wee'
