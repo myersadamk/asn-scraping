@@ -135,19 +135,18 @@ class ActiveAsnReportGenerator:
 
     # Writes an ASN report as JSON with the configured instance prefix and directory, returning the generated report
     # dictionary. An existing report can optionally be passed, otherwise it will be generated.
-    def write_asn_report(self, report=None, *country_codes):
+    def write_asn_report(self, *country_codes):
         def generate_current_timestamp():
             return datetime.fromtimestamp(time()).strftime('%Y_%m_%d_%H_%M_%S')
 
+        new_report = self.get_asn_report(*country_codes)
         report_path = \
             path.join(curdir, self._report_dir, self._report_prefix + '_' + generate_current_timestamp() + '.json')
 
-        if report is None:
-            report = self.get_asn_report(*country_codes)
         with open(report_path, 'w') as report_file:
-            report_file.write(dumps(report, indent=2, sort_keys=True))
+            report_file.write(ActiveAsnReportGenerator.as_json(new_report))
 
-        return report
+        return new_report
 
     # Gets an ASN report for all given country codes, or all listed countries if no country_codes are specified.
     # The format of the report is a dictionary with entries keyed by their numeric ASN numbers; this is basically
@@ -171,9 +170,14 @@ class ActiveAsnReportGenerator:
 
         return final_report
 
+    @staticmethod
+    def as_json(report):
+        return dumps(report, indent=2, sort_keys=True)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
         '--report-prefix',
         default='asn_report',
@@ -206,15 +210,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     generator = ActiveAsnReportGenerator(report_prefix=args.report_prefix, report_dir=args.report_dir)
 
-    if set(args.actions) & set(('write', 'print')):
-        report = generator.get_asn_report(*args.country_codes)
-
     for action in args.actions:
         if action == 'clear':
             generator.clear_asn_reports()
         elif action == 'write':
-            generator.write_asn_report(report=report)
-        elif action == 'print':
-            print dumps(report, indent=2, sort_keys=True)
-        else:
+            asn_report = generator.write_asn_report(*args.country_codes)
+            if 'print' in args.actions:
+                print ActiveAsnReportGenerator.as_json(asn_report)
+        elif action != 'print':
             print 'Unrecognized action "' + action + '". This option will be ignored.'
