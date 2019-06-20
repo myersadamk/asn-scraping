@@ -124,16 +124,6 @@ class HurricaneElectricIntegrationTest(TestCase):
             self.assertEqual(int, type(asn['Routes v6']))
         self.generate_report(assertion_func, 'US')
 
-    def test_write_US_DE_asn_report(self):
-        def assertion_func(asn):
-            # Not an ideal assertion, since we could still not have any DE or US in the output
-            self.assertIn(('US', 'DE'), asn['Country'])
-            self.assertGreater(asn['Name'].__len__, 0)
-            self.assertEqual(unicode, type(asn['Name']))
-            self.assertEqual(int, type(asn['Routes v4']))
-            self.assertEqual(int, type(asn['Routes v6']))
-        self.generate_report(assertion_func, 'US', 'DE')
-
     def generate_report(self, assertion_func, *country_codes):
         self.assertEqual(listdir(self._REPORT_DIR).__len__(), 0)
         self._report_generator.write_asn_report(*country_codes)
@@ -144,5 +134,5 @@ class HurricaneElectricIntegrationTest(TestCase):
         with open(path.join(self._REPORT_DIR, reports[0]), 'r') as report:
             asns = load(report)
             self.assertGreater(asns.values().__len__, 0)
-            for asn in asns.iteritems():
+            for asn in asns.values():
                 assertion_func(asn)
