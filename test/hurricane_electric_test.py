@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from json import load
-from os import listdir, path
+from os import listdir, path, rmdir
 from unittest import TestCase
 
 import bs4
@@ -91,10 +91,18 @@ class ActiveAsnDirectoryTest(SoupableTestFixture, TestCase):
 
 
 class HurricaneElectricIntegrationTest(TestCase):
-    _REPORT_DIR = 'test_reports'
+
+    @classmethod
+    def setUpClass(cls):
+        cls._REPORT_DIR = 'test_reports'
+
+    @classmethod
+    def tearDownClass(cls):
+        if path.exists(cls._REPORT_DIR):
+            rmdir(cls._REPORT_DIR)
 
     def setUp(self):
-        self._report_generator = ActiveAsnReportGenerator(report_dir=self._REPORT_DIR)
+        self._report_generator = ActiveAsnReportGenerator(report_dir=HurricaneElectricIntegrationTest._REPORT_DIR)
         self._report_generator.clear_asn_reports()
 
     def tearDown(self):
@@ -121,13 +129,14 @@ class HurricaneElectricIntegrationTest(TestCase):
         self._generate_and_assert_report(assertion_func)
 
     def _generate_and_assert_report(self, assertion_func, *country_codes):
-        self.assertEqual(listdir(self._REPORT_DIR).__len__(), 0)
+        report_dir = HurricaneElectricIntegrationTest._REPORT_DIR
+        self.assertEqual(listdir(report_dir).__len__(), 0)
         self._report_generator.write_asn_report(*country_codes)
 
-        reports = listdir(self._REPORT_DIR)
+        reports = listdir(report_dir)
         self.assertEqual(reports.__len__(), 1)
 
-        with open(path.join(self._REPORT_DIR, reports[0]), 'r') as report:
+        with open(path.join(report_dir, reports[0]), 'r') as report:
             asns = load(report)
             self.assertGreater(asns.values().__len__, 0)
             for asn in asns.values():

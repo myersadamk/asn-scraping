@@ -33,7 +33,7 @@ from re import compile, match
 from threading import Thread
 from time import time
 from urllib2 import Request, urlopen
-from string import translate
+import argparse
 
 from bs4 import BeautifulSoup
 
@@ -167,4 +167,4 @@ class ActiveAsnReportGenerator:
 # ActiveAsnDirectory().get_reports('DE', 'US')
 
 if __name__ == '__main__':
-    print 'wee'
+    config = argparse.Ar
