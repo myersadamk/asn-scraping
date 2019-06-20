@@ -50,7 +50,8 @@ class Soupable(object):
         return BeautifulSoup(html, 'html.parser')
 
 
-# Wraps individual Country's active ASN pages.
+# Wraps individual Country's active ASN report page, providing screen-scraping functionality that
+# retrieves ASN information.
 class CountryAsnReport(Soupable):
 
     def __init__(self, country_code):
@@ -64,7 +65,6 @@ class CountryAsnReport(Soupable):
     #     'Routes v4': <number of v4 routes>
     #     'Routes v6': <number of v6 routes>
     # }
-    #
     def get_asn_report(self):
         asn_info_by_asn_id = {}
         table_soup = self.soup.find('table', attrs={'id': 'asns'})
@@ -90,11 +90,16 @@ class CountryAsnReport(Soupable):
 
         return asn_info_by_asn_id
 
+    # May be superfluous since the JSON dump removes the unicode-type characters anyway,
+    # but helps when consuming the module directly. I'm not sure if it's more idiomatic
+    # to just use unicode.
     @staticmethod
     def _to_utf8(unicode_string):
         return unicode_string.encode('utf-8')
 
 
+# Wraps the main ASN Report listing page, providing screen-scraping functionality for getting
+# individual CountryAsnReport instances.
 class ActiveAsnDirectory(Soupable):
     _REPORT_LINK_REGEX = compile('/country/([A-Z]+)')
 
@@ -128,16 +133,25 @@ class ActiveAsnReportGenerator:
         for report in listdir(path.join(curdir, self._report_dir)):
             remove(path.join(curdir, self._report_dir, report))
 
-    def write_asn_report(self, *country_codes):
+    # Writes an ASN report as JSON with the configured instance prefix and directory, returning the generated report
+    # dictionary. An existing report can optionally be passed, otherwise it will be generated.
+    def write_asn_report(self, report=None, *country_codes):
         def generate_current_timestamp():
             return datetime.fromtimestamp(time()).strftime('%Y_%m_%d_%H_%M_%S')
 
         report_path = \
             path.join(curdir, self._report_dir, self._report_prefix + '_' + generate_current_timestamp() + '.json')
 
+        if report is None:
+            report = self.get_asn_report(*country_codes)
         with open(report_path, 'w') as report_file:
-            report_file.write(dumps(self.get_asn_report(*country_codes), indent=2, sort_keys=True))
+            report_file.write(dumps(report, indent=2, sort_keys=True))
 
+        return report
+
+    # Gets an ASN report for all given country codes, or all listed countries if no country_codes are specified.
+    # The format of the report is a dictionary with entries keyed by their numeric ASN numbers; this is basically
+    # a dictionary of all respective CountryAsnReport::get_asn_report() as entries.
     def get_asn_report(self, *country_codes):
         final_report = {}
 
@@ -158,13 +172,49 @@ class ActiveAsnReportGenerator:
         return final_report
 
 
-# ActiveAsnReportGenerator().clear_asn_reports()
-# ActiveAsnReportGenerator().write_asn_report('US', 'DE', 'NU')
-# ActiveAsnReportGenerator().write_asn_report()
-
-# print u'129,488'.replace(',', '')
-# int('129,488')
-# ActiveAsnDirectory().get_reports('DE', 'US')
-
 if __name__ == '__main__':
-    config = argparse.Ar
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--report-prefix',
+        default='asn_report',
+        help='Defines the output prefix for ASN reports (default: asn_report).'
+             'For instance, if the default value is used, the output will be asn_report_TIMESTAMP.json'
+    )
+    parser.add_argument(
+        '--report-dir',
+        default='reports',
+        help='Defines the output directory for ASN reports (default: ./reports)'
+    )
+    parser.add_argument(
+        '--country-codes',
+        nargs='*',
+        default=(),
+        help='Specifies the country codes (e.g. US DE) to retrieve ASNs for.'
+             'If unspecified, all listed countries will be reported.'
+    )
+    parser.add_argument(
+        '--actions',
+        nargs='+',
+        default=['write'],
+        help='Specifies the actions to take. By default, only the "write" action is taken. All actions include:\n'
+             '"clear": clears all ASN reports in the specified (or default) report_dir.'
+             '"write": writes an ASN report according to the other configurations provided.'
+             '"print": prints the ASN report to stdout.'
+
+    )
+
+    args = parser.parse_args()
+    generator = ActiveAsnReportGenerator(report_prefix=args.report_prefix, report_dir=args.report_dir)
+
+    if set(args.actions) & set(('write', 'print')):
+        report = generator.get_asn_report(*args.country_codes)
+
+    for action in args.actions:
+        if action == 'clear':
+            generator.clear_asn_reports()
+        elif action == 'write':
+            generator.write_asn_report(report=report)
+        elif action == 'print':
+            print dumps(report, indent=2, sort_keys=True)
+        else:
+            print 'Unrecognized action "' + action + '". This option will be ignored.'

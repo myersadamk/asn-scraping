@@ -107,6 +107,7 @@ class HurricaneElectricIntegrationTest(TestCase):
 
     def tearDown(self):
         self._report_generator.clear_asn_reports()
+        # self.assertEqual(0, listdir(HurricaneElectricIntegrationTest._REPORT_DIR).__len__())
 
     def test_write_US_asn_report(self):
         def assertion_func(asn):
